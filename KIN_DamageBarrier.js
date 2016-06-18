@@ -124,9 +124,6 @@ Game_Action.prototype.Kinoko_calcDotDamage = function(value,a,target) {
     }
     upper = 100;
     if (this.isMagical()) {
-        if((item.stypeId == 1 || item.stypeId == 2) && item.scope == 2){
-            value = value * (Math.max(10 - repeat_attack,5)) / 10;
-        }
         value *= target.mdr;
         if(a.isActor()){
             for(var i = 0; i < a.equips().length; i++){
