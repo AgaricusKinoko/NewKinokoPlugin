@@ -1,4 +1,4 @@
-﻿//=============================================================================
+//=============================================================================
 // KIN_DamageBarrier.js
 //=============================================================================
 
@@ -68,6 +68,97 @@ Game_Battler.prototype.initMembers = function() {
     Kinoko_Binit.call(this);
     this._damageBarrier = [];
     for(var i = 0; i < $dataStates.length; i++) this._damageBarrier[i] = 0;
+    this._DOT = [];
+    for(var i = 0; i < $dataStates.length; i++) this._DOT[i] = 0;
+};
+
+Game_Action.prototype.itemEffectAddState = function(target, effect) {
+    Kinoko_Add.call(this,target,effect);
+    if(effect.dataId > 0){
+        var dotId = $dataStates[effect.dataId].meta.DOT;
+        if(dotId != null){
+            var a = this.subject();
+            var b = target;
+            var damage = target.result().hpDamage;
+            var value = Math.floor(eval(dotId));
+            value = this.Kinoko_calcDotDamage(value,a,target);
+            target._DOT[effect.dataId] = value;
+        }
+    }
+};
+
+Game_Action.prototype.Kinoko_calcDotDamage = function(value,a,target) {
+    var upper = 100;
+    var item = this.item();
+    if (this.isPhysical()) {
+        value *= target.pdr;
+        if(a.isActor()){
+            for(var i = 0; i < a.equips().length; i++){
+                if(a.equips()[i] != null){
+                    var equip = a.equips()[i];
+                    var up = equip.meta.cause_physical;
+                    up = parseInt(up);
+                    if(!(up>=0 || up<=0)) up = 0;
+                    upper += up;
+                }
+            }
+        }
+        for(var i = 0; i < a.states().length; i++){
+            var state = a.states()[i];
+            var up = state.meta.cause_physical;
+            up = parseInt(up);
+            if(!(up>=0 || up<=0)) up = 0;
+            upper += up;
+        }
+        for(var i = 0; i < target.states().length; i++){
+            var state = target.states()[i];
+            var up = state.meta.twice_physical;
+            if(up != null) value = value * up;
+            var up = state.meta.twice_magical;
+            if(up != null) value = value / up;
+            var up = state.meta.absorb_physical;
+            if(value > 0 && up != null) value = value * -1 * up / 100;
+        }
+        if(upper < 0 ) upper = 0;
+        value = value * upper / 100;
+    }
+    upper = 100;
+    if (this.isMagical()) {
+        if((item.stypeId == 1 || item.stypeId == 2) && item.scope == 2){
+            value = value * (Math.max(10 - repeat_attack,5)) / 10;
+        }
+        value *= target.mdr;
+        if(a.isActor()){
+            for(var i = 0; i < a.equips().length; i++){
+                if(a.equips()[i] != null){
+                    var equip = a.equips()[i];
+                    var up = equip.meta.cause_magical;
+                    up = parseInt(up);
+                    if(!(up>=0 || up<=0)) up = 0;
+                    upper += up;
+                }
+            }
+        }
+        for(var i = 0; i < a.states().length; i++){
+            var state = a.states()[i];
+            var up = state.meta.cause_magical;
+            up = parseInt(up);
+            if(!(up>=0 || up<=0)) up = 0;
+            upper += up;
+        }
+        for(var i = 0; i < target.states().length; i++){
+            var state = target.states()[i];
+            var up = state.meta.twice_magical;
+            if(up != null) value = value * up;
+            var up = state.meta.twice_physical;
+            if(up != null) value = value / up;
+            var up = state.meta.absorb_magical;
+            if(value > 0 && up != null) value = value * -1 * up / 100;
+        }
+        if(upper < 0 ) upper = 0;
+        value = value * upper / 100;
+    }
+    return Math.floor(value);
 };
 
 Game_Action.prototype.apply = function(target) {
@@ -88,7 +179,6 @@ Game_Action.prototype.apply = function(target) {
         }
         if(i == this.subject().states().length) stateid = 0;
     }
-    alert(stateid);
     if(stateid > 0){
         var type = this.item().meta.barrier_type;
         var value = this.item().meta.barrier_value;
@@ -99,8 +189,106 @@ Game_Action.prototype.apply = function(target) {
         if(type != null && type.indexOf("damage") >= 0) target._damageBarrier[stateid] = parseInt(Math.abs(result.hpDamage) * value / 100);
         if(type != null && type.indexOf("fixed") >= 0) target._damageBarrier[stateid] = parseInt(value);
         if(type != null && type.indexOf("formula") >= 0) target._damageBarrier[stateid] = parseInt(eval(value));
-        alert(target._damageBarrier[stateid]);
     }
+};
+
+Game_Action.prototype.makeDamageValue = function(target, critical) {
+    var value = Kinoko_Damage2.call(this,target,critical);
+    return value;
+};
+
+Game_Battler.prototype.regenerateHp = function() {
+    var value = Math.floor(this.mhp * this.hrg);
+    var dot = 0;
+    for(var i = 0; i < this.states().length; i++){
+        var state = this.states()[i];
+        var at = state.meta.DOT;
+        if(at != null) dot += this._DOT[state.id];
+    }
+    value -= dot;
+    value = Math.max(value, -this.maxSlipDamage());
+    if(value < 0){
+    for(var i = 0; i < this.states().length; i++){
+        var state = this.states()[i];
+        var bar = state.meta.barrier;
+        if(bar != null){
+            if(bar.indexOf("all") >= 0){
+                value = this.KIN_barrierR(value,state);
+                i--;
+            }
+        }
+        if(value == 0){
+            this.gainHp(value);
+            break;
+        }
+    }
+    }
+    if (value !== 0) {
+        this.gainHp(value);
+    }
+    var hot = 0;
+    for(var i = 0; i < this.states().length; i++){
+        var state = this.states()[i];
+        var up = state.meta.HOT;
+        up = parseInt(up);
+        if(!(up>=0 || up<=0)) up = 0;
+        hot += up;
+    }
+    var value = this.mhp * hot / 100;
+    value *= this.rec;
+    value = Math.floor(value);
+    if (value !== 0) {
+        this.gainHp(value);
+    }
+};
+
+Game_Battler.prototype.regenerateMp = function() {
+    var value = Math.floor(this.mmp * this.mrg);
+    if(value < 0){
+    for(var i = 0; i < this.states().length; i++){
+        var state = this.states()[i];
+        var bar = state.meta.barrier;
+        if(bar != null){
+            if(bar.indexOf("all") >= 0){
+                value = this.KIN_barrierR(value,state);
+                i--;
+            }
+        }
+        if(value == 0){
+            this.gainMp(value);
+            break;
+        }
+    }
+    }
+    if (value !== 0) {
+        this.gainMp(value);
+    }
+    var hot = 0;
+    for(var i = 0; i < this.states().length; i++){
+        var state = this.states()[i];
+        var up = state.meta.MOT;
+        up = parseInt(up);
+        if(!(up>=0 || up<=0)) up = 0;
+        hot += up;
+    }
+    var value = this.mmp * hot / 100;
+    value *= this.rec;
+    value = Math.floor(value);
+    if (value !== 0) {
+        this.gainMp(value);
+    }
+};
+
+Game_Battler.prototype.KIN_barrierR = function(value,state) {
+    if(this._damageBarrier[state.id] > -value){
+        this._damageBarrier[state.id] -= -value;
+        value = 0;
+    } else {
+        value += this._damageBarrier[state.id];
+        this._damageBarrier[state.id] = 0;
+        this.removeState(state.id);
+    }
+    return value;
 };
 
 Game_Action.prototype.KIN_barrier = function(target,value,state) {
