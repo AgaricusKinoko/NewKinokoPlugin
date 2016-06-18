@@ -33,7 +33,7 @@
  * <barrier_type:target_mhp>…対象の最大ＨＰ
  * <barrier_type:this_mhp>…使用者の最大ＨＰ
  * <barrier_type:damage>…このスキルで与えたダメージ（回復）
- * <barrier_type:formula>…このスキルのダメージ計算式の結果
+ * <barrier_type:formula>…計算式を直接記述する
  * <barrier_type:fixed>…固定値
  *
  * <barrier_value:X>
@@ -189,6 +189,7 @@ Game_Action.prototype.apply = function(target) {
         if(type != null && type.indexOf("damage") >= 0) target._damageBarrier[stateid] = parseInt(Math.abs(result.hpDamage) * value / 100);
         if(type != null && type.indexOf("fixed") >= 0) target._damageBarrier[stateid] = parseInt(value);
         if(type != null && type.indexOf("formula") >= 0) target._damageBarrier[stateid] = parseInt(eval(value));
+        alert(target._damageBarrier[stateid]);
     }
 };
 
