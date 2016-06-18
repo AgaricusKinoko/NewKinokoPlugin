@@ -179,6 +179,7 @@ Game_Action.prototype.apply = function(target) {
         }
         if(i == this.subject().states().length) stateid = 0;
     }
+    alert(stateid);
     if(stateid > 0){
         var type = this.item().meta.barrier_type;
         var value = this.item().meta.barrier_value;
